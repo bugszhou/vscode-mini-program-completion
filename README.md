@@ -1,2 +1,3 @@
-# vscode-mini-program-completion
-小程序wxml提示插件
+# 小程序 Class 风格代码补全
+
+v0.0.1
