@@ -92,8 +92,8 @@ export function activate(context: vscode.ExtensionContext) {
                   const tagStr = commentObj?.tags
                     ?.map?.(
                       (tag) =>
-                        `@${tag.tag} - ${tag.type} - ${
-                          tag.description || "无"
+                        `@${tag?.tag}${tag?.type ? ` - ${tag.type}` : ""}${
+                          tag?.description ? ` - ${tag.description || ""}` : ""
                         }`,
                     )
                     ?.join("\n ");
