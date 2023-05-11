@@ -5,6 +5,7 @@ import { readFileSync } from "jsonfile";
 import * as vscode from "vscode";
 import { Project, SyntaxKind } from "ts-morph";
 import { parse } from "comment-parser";
+import { existsSync } from "fs";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -37,6 +38,11 @@ export function activate(context: vscode.ExtensionContext) {
         const componentPath =
           componentConfig?.usingComponents?.[componentName] ?? "";
         const jsFile = join(dir, componentPath) + ".ts";
+
+        if (!existsSync(jsFile)) {
+          return;
+        }
+
         const project = new Project();
 
         const jsContent = project.addSourceFileAtPath(jsFile);
