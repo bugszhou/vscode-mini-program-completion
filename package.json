@@ -14,6 +14,10 @@
     "onLanguage:wxml"
   ],
   "main": "./out/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bugszhou/vscode-mini-program-completion"
+  },
   "contributes": {
     "commands": []
   },
