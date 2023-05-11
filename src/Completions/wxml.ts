@@ -37,7 +37,27 @@ export default class Wxml implements CompletionItemProvider {
         position.translate(0, -1),
       ),
     );
-    const componentName = componentNameText.split("<")[1];
+    const componentName = componentNameText.split("<")[1]?.split(" ")?.[0];
+
+    const isMethod = documentation
+      .getText(
+        new vscode.Range(
+          new vscode.Position(position.line, position.character),
+          position.translate(0, -1),
+        ),
+      )
+      .includes(":");
+
+    const lastSpaceIndex = componentNameText.split("").lastIndexOf(" ");
+
+    const typingText = documentation
+      .getText(
+        new vscode.Range(
+          new vscode.Position(position.line, lastSpaceIndex),
+          position.translate(0, 0),
+        ),
+      )
+      ?.trim();
 
     if (!componentName || componentName?.startsWith("/")) {
       return;
@@ -55,29 +75,82 @@ export default class Wxml implements CompletionItemProvider {
 
     const jsContent = project.addSourceFileAtPath(jsFile);
 
-    let props: string[] = [];
-
     const computedPropsType: string[] = [];
     const newProps: any[] = [];
-
-    const imports = jsContent.getImportDeclarations();
-    console.log(imports[0].getModuleSpecifierSourceFile());
+    const events: any[] = [];
 
     jsContent.forEachChild((item) => {
       if (item.asKind(SyntaxKind.ClassDeclaration)) {
         try {
-          props =
-            item
-              .asKindOrThrow(SyntaxKind.ClassDeclaration)
-              .getPropertyOrThrow("properties")
-              .getInitializer()
-              ?.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
-              ?.getProperties()
-              .map((property) => {
-                computedPropsType.push(property?.getType()?.getText());
-                return property.getText()?.split(":")[0] || "";
-              })
-              .filter((property) => property) ?? [];
+          item
+            .getChildrenOfKind(SyntaxKind.MethodDeclaration)
+            .filter((func) =>
+              func.getBodyOrThrow().getText().includes("triggerEvent"),
+            )
+            .forEach((func) => {
+              const expression = func.getStatementByKind(
+                SyntaxKind.ExpressionStatement,
+              );
+              const argumentsNodes = expression
+                ?.getExpressionIfKind(SyntaxKind.CallExpression)
+                ?.getArguments();
+
+              const comment =
+                expression?.getLeadingCommentRanges()?.[0]?.getText() || "";
+
+              const parsed = parse(comment, { spacing: "preserve" });
+              const commentObj = parsed[0];
+              const tagStr = commentObj?.tags
+                ?.map?.(
+                  (tag) =>
+                    `@${tag?.tag}${tag?.type ? ` - ${tag.type}` : ""}${
+                      tag?.description ? ` - ${tag.description || ""}` : ""
+                    }`,
+                )
+                ?.join("\n ");
+
+              const eventName = (argumentsNodes?.[0]?.getText() || "")
+                .replace(/^(\"|\')/, "")
+                .replace(/(\"|\')$/, "");
+              const dataType =
+                argumentsNodes?.[1]?.getType()?.getApparentType()?.getText() ||
+                "";
+
+              const detail = new vscode.MarkdownString(`
+- 自定义事件
+- 数据类型：${dataType}
+- 说明：\n
+  ${commentObj?.description || ""}
+  ${tagStr || ""}\n
+`);
+              detail.appendMarkdown(`[点击查看文件](${jsFile})`);
+              detail.isTrusted = true;
+
+              events.push({
+                label: eventName,
+                insertText:
+                  typingText.length > 1
+                    ? `${eventName}=""`
+                    : `catch:${eventName}=""`,
+                sortText: "_",
+                documentation: detail,
+                kind: vscode.CompletionItemKind.Method,
+              });
+            });
+
+          if (isMethod) {
+            return;
+          }
+
+          item
+            .asKindOrThrow(SyntaxKind.ClassDeclaration)
+            .getPropertyOrThrow("properties")
+            .getInitializer()
+            ?.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
+            ?.getProperties()
+            .forEach((property) => {
+              computedPropsType.push(property?.getType()?.getText());
+            });
 
           item
             .asKindOrThrow(SyntaxKind.ClassDeclaration)
@@ -105,15 +178,22 @@ export default class Wxml implements CompletionItemProvider {
                 )
                 ?.join("\n ");
 
+                const detail = new vscode.MarkdownString(`
+- 自定义事件
+- 数据类型：${computedPropsType[index] || ""}
+- 说明：\n
+  ${commentObj?.description || ""}
+  ${tagStr || ""}\n
+`);
+                detail.appendMarkdown(`[点击查看文件](${jsFile})`);
+                detail.isTrusted = true;
+
               newProps.push({
                 label: tempProperty?.getText()?.split(":")[0] || "",
-                detail: `
-Properties属性
-类型：${computedPropsType[index] || ""}
-说明：
-${commentObj?.description || ""}
-${tagStr || ""}
-                `,
+                insertText: `${
+                  tempProperty?.getText()?.split(":")[0] || ""
+                }="{{  }}"`,
+                documentation: detail,
                 kind: vscode.CompletionItemKind.Property,
               });
             });
@@ -142,6 +222,6 @@ ${tagStr || ""}
       }
     });
 
-    return Promise.resolve(newProps);
+    return Promise.resolve([...newProps, ...events]);
   }
 }
