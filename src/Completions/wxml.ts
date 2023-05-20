@@ -1,7 +1,7 @@
 import { existsSync } from "fs";
 import { readFileSync } from "jsonfile";
 import { dirname, join } from "path";
-import { Project, SyntaxKind } from "ts-morph";
+import { CallExpression, Project, SyntaxKind } from "ts-morph";
 import { parse } from "comment-parser";
 import * as vscode from "vscode";
 import {
@@ -88,54 +88,68 @@ export default class Wxml implements CompletionItemProvider {
               func.getBodyOrThrow().getText().includes("triggerEvent"),
             )
             .forEach((func) => {
-              const expression = func.getStatementByKind(
-                SyntaxKind.ExpressionStatement,
-              );
-              const argumentsNodes = expression
-                ?.getExpressionIfKind(SyntaxKind.CallExpression)
-                ?.getArguments();
-
-              const comment =
-                expression?.getLeadingCommentRanges()?.[0]?.getText() || "";
-
-              const parsed = parse(comment, { spacing: "preserve" });
-              const commentObj = parsed[0];
-              const tagStr = commentObj?.tags
-                ?.map?.(
-                  (tag) =>
-                    `@${tag?.tag}${tag?.type ? ` - ${tag.type}` : ""}${
-                      tag?.description ? ` - ${tag.description || ""}` : ""
-                    }`,
+              const allExpression = func
+                .getStatements()
+                .filter((state) =>
+                  state.getText()?.includes("this.triggerEvent"),
                 )
-                ?.join("\n ");
+                .map((state) => {
+                  return state
+                    .asKind(SyntaxKind.ExpressionStatement)
+                    ?.getExpressionIfKind(SyntaxKind.CallExpression);
+                });
+              console.log(allExpression);
 
-              const eventName = (argumentsNodes?.[0]?.getText() || "")
-                .replace(/^(\"|\')/, "")
-                .replace(/(\"|\')$/, "");
-              const dataType =
-                argumentsNodes?.[1]?.getType()?.getApparentType()?.getText() ||
-                "";
+              allExpression.forEach((statement) => {
+                events.push(getEvent(statement));
+              });
 
-              const detail = new vscode.MarkdownString(`
+              function getEvent(expression?: CallExpression) {
+                const argumentsNodes = expression?.getArguments();
+
+                const comment =
+                  expression?.getLeadingCommentRanges()?.[0]?.getText() || "";
+
+                const parsed = parse(comment, { spacing: "preserve" });
+                const commentObj = parsed[0];
+                const tagStr = commentObj?.tags
+                  ?.map?.(
+                    (tag) =>
+                      `@${tag?.tag}${tag?.type ? ` - ${tag.type}` : ""}${
+                        tag?.description ? ` - ${tag.description || ""}` : ""
+                      }`,
+                  )
+                  ?.join("\n ");
+
+                const eventName = (argumentsNodes?.[0]?.getText() || "")
+                  .replace(/^(\"|\')/, "")
+                  .replace(/(\"|\')$/, "");
+                const dataType =
+                  argumentsNodes?.[1]
+                    ?.getType()
+                    ?.getApparentType()
+                    ?.getText() || "";
+
+                const detail = new vscode.MarkdownString(`
 - 自定义事件
 - 数据类型：${dataType}
 - 说明：\n
   ${commentObj?.description || ""}
   ${tagStr || ""}\n
 `);
-              detail.appendMarkdown(`[点击查看文件](${jsFile})`);
-              detail.isTrusted = true;
-
-              events.push({
-                label: eventName,
-                insertText:
-                  typingText.length > 1
-                    ? `${eventName}=""`
-                    : `catch:${eventName}=""`,
-                sortText: "_",
-                documentation: detail,
-                kind: vscode.CompletionItemKind.Method,
-              });
+                detail.appendMarkdown(`[点击查看文件](${jsFile})`);
+                detail.isTrusted = true;
+                return {
+                  label: eventName,
+                  insertText:
+                    typingText.length > 1 && /\:$/.test(typingText)
+                      ? `${eventName}=""`
+                      : ` catch:${eventName}=""`,
+                  sortText: "_",
+                  documentation: detail,
+                  kind: vscode.CompletionItemKind.Method,
+                };
+              }
             });
 
           if (isMethod) {
@@ -178,15 +192,15 @@ export default class Wxml implements CompletionItemProvider {
                 )
                 ?.join("\n ");
 
-                const detail = new vscode.MarkdownString(`
+              const detail = new vscode.MarkdownString(`
 - 自定义事件
 - 数据类型：${computedPropsType[index] || ""}
 - 说明：\n
   ${commentObj?.description || ""}
   ${tagStr || ""}\n
 `);
-                detail.appendMarkdown(`[点击查看文件](${jsFile})`);
-                detail.isTrusted = true;
+              detail.appendMarkdown(`[点击查看文件](${jsFile})`);
+              detail.isTrusted = true;
 
               newProps.push({
                 label: tempProperty?.getText()?.split(":")[0] || "",
@@ -197,25 +211,6 @@ export default class Wxml implements CompletionItemProvider {
                 kind: vscode.CompletionItemKind.Property,
               });
             });
-
-          // const comments = item
-          //   .asKindOrThrow(SyntaxKind.ClassDeclaration)
-          //   .getPropertyOrThrow("properties")
-          //   .getInitializerOrThrow()
-          //   .asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
-          //   .getPropertyOrThrow("name")
-          //   .getLeadingCommentRanges();
-
-          // console.log("comments: ", comments.length);
-          // comments.forEach((item) => {
-          //   console.log(item.getText());
-          // });
-          // console.log(
-          //   item
-          //     .asKindOrThrow(SyntaxKind.ClassDeclaration)
-          //     .getPropertyOrThrow("properties")
-          //     .getTrailingCommentRanges(),
-          // );
         } catch (e) {
           console.error(e);
         }
