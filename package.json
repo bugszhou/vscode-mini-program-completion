@@ -2,7 +2,7 @@
   "name": "mini-program-completion",
   "displayName": "mini program completion",
   "description": "wxml completion",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "yirizhou",
   "engines": {
     "vscode": "^1.70.0"
