@@ -193,7 +193,7 @@ export default class Wxml implements CompletionItemProvider {
                 ?.join("\n ");
 
               const detail = new vscode.MarkdownString(`
-- 自定义事件
+- 自定义属性
 - 数据类型：${computedPropsType[index] || ""}
 - 说明：\n
   ${commentObj?.description || ""}
