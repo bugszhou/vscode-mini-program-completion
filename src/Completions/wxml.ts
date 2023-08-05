@@ -14,6 +14,7 @@ import {
   ProviderResult,
   TextDocument,
 } from "vscode";
+import { getRoot } from "../helps/paths";
 
 export default class Wxml implements CompletionItemProvider {
   provideCompletionItems(
@@ -63,9 +64,11 @@ export default class Wxml implements CompletionItemProvider {
       return;
     }
 
-    const componentPath =
+    const componentPath: string =
       componentConfig?.usingComponents?.[componentName] ?? "";
-    const jsFile = join(dir, componentPath) + ".ts";
+
+    const isUseRootPath = componentPath?.startsWith("/");
+    const jsFile = join(isUseRootPath ? (join(getRoot(), "src")) : dir, componentPath) + ".ts";
 
     if (!existsSync(jsFile)) {
       return;
